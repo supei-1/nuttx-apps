@@ -168,16 +168,19 @@ static int button_daemon(int argc, char *argv[])
 
   g_button_daemon_started = true;
   printf("button_daemon: Running\n");
+  fflush(stdout);
 
   /* Open the BUTTON driver */
 
   printf("button_daemon: Opening %s\n", CONFIG_EXAMPLES_BUTTONS_DEVPATH);
+  fflush(stdout);
   fd = open(CONFIG_EXAMPLES_BUTTONS_DEVPATH, O_RDONLY | O_NONBLOCK);
   if (fd < 0)
     {
       int errcode = errno;
       printf("button_daemon: ERROR: Failed to open %s: %d\n",
              CONFIG_EXAMPLES_BUTTONS_DEVPATH, errcode);
+      fflush(stdout);
       goto errout;
     }
 
@@ -190,11 +193,13 @@ static int button_daemon(int argc, char *argv[])
       int errcode = errno;
       printf("button_daemon: ERROR: ioctl(BTNIOC_SUPPORTED) failed: %d\n",
              errcode);
+      fflush(stdout);
       goto errout_with_fd;
     }
 
   printf("button_daemon: Supported BUTTONs 0x%02x\n",
          (unsigned int)supported);
+  fflush(stdout);
 
 #ifdef CONFIG_EXAMPLES_BUTTONS_SIGNAL
   /* Define the notifications events */
@@ -214,6 +219,7 @@ static int button_daemon(int argc, char *argv[])
       int errcode = errno;
       printf("button_daemon: ERROR: ioctl(BTNIOC_SUPPORTED) failed: %d\n",
              errcode);
+      fflush(stdout);
       goto errout_with_fd;
     }
 
@@ -360,6 +366,7 @@ errout:
   g_button_daemon_started = false;
 
   printf("button_daemon: Terminating\n");
+  fflush(stdout);
   return EXIT_FAILURE;
 }
 
@@ -376,9 +383,11 @@ int main(int argc, FAR char *argv[])
   int ret;
 
   printf("buttons_main: Starting the button_daemon\n");
+  fflush(stdout);
   if (g_button_daemon_started)
     {
       printf("buttons_main: button_daemon already running\n");
+      fflush(stdout);
       return EXIT_SUCCESS;
     }
 
@@ -390,9 +399,11 @@ int main(int argc, FAR char *argv[])
       int errcode = errno;
       printf("buttons_main: ERROR: Failed to start button_daemon: %d\n",
              errcode);
+      fflush(stdout);
       return EXIT_FAILURE;
     }
 
   printf("buttons_main: button_daemon started\n");
+  fflush(stdout);
   return EXIT_SUCCESS;
 }
