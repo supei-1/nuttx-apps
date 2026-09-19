@@ -32,6 +32,7 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <signal.h>
 #include <errno.h>
 #include <unistd.h>
 
@@ -132,10 +133,23 @@ static const char button_name[CONFIG_EXAMPLES_BUTTONS_QTD][16] =
 #endif
 
 static bool g_button_daemon_started;
+static volatile sig_atomic_t g_button_daemon_exit;
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+#ifndef CONFIG_DISABLE_SIGNALS
+/****************************************************************************
+ * Name: button_sigint
+ ****************************************************************************/
+
+static void button_sigint(int signo)
+{
+  UNUSED(signo);
+  g_button_daemon_exit = 1;
+}
+#endif
 
 /****************************************************************************
  * Name: button_daemon
@@ -232,7 +246,7 @@ static int button_daemon(int argc, char *argv[])
 
   /* Now loop forever, waiting BUTTONs events */
 
-  for (; ; )
+  for (; !g_button_daemon_exit; )
     {
 #ifdef CONFIG_EXAMPLES_BUTTONS_SIGNAL
       struct siginfo value;
@@ -277,7 +291,15 @@ static int button_daemon(int argc, char *argv[])
       if (ret < 0)
         {
           int errcode = errno;
-          printf("button_daemon: ERROR poll failed: %d\n", errcode);
+          if (errcode != EINTR || !g_button_daemon_exit)
+            {
+              printf("button_daemon: ERROR poll failed: %d\n", errcode);
+            }
+
+          if (g_button_daemon_exit)
+            {
+              break;
+            }
         }
       else if (ret == 0)
         {
@@ -367,7 +389,7 @@ errout:
 
   printf("button_daemon: Terminating\n");
   fflush(stdout);
-  return EXIT_FAILURE;
+  return g_button_daemon_exit ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 /****************************************************************************
@@ -382,6 +404,8 @@ int main(int argc, FAR char *argv[])
 {
   int ret;
 
+  g_button_daemon_exit = 0;
+
   printf("buttons_main: Starting the button_daemon\n");
   fflush(stdout);
   if (g_button_daemon_started)
@@ -391,19 +415,28 @@ int main(int argc, FAR char *argv[])
       return EXIT_SUCCESS;
     }
 
-  ret = task_create("button_daemon", CONFIG_EXAMPLES_BUTTONS_PRIORITY,
-                    CONFIG_EXAMPLES_BUTTONS_STACKSIZE, button_daemon,
-                    NULL);
-  if (ret < 0)
+#ifndef CONFIG_DISABLE_SIGNALS
+  {
+    struct sigaction act;
+
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = button_sigint;
+    sigemptyset(&act.sa_mask);
+    sigaction(SIGINT, &act, NULL);
+  }
+#endif
+
+  /* Run in the foreground so NSH can deliver Ctrl+C to this task. */
+
+  ret = button_daemon(argc, argv);
+  if (ret != EXIT_SUCCESS)
     {
-      int errcode = errno;
-      printf("buttons_main: ERROR: Failed to start button_daemon: %d\n",
-             errcode);
+      printf("buttons_main: button_daemon failed\n");
       fflush(stdout);
       return EXIT_FAILURE;
     }
 
-  printf("buttons_main: button_daemon started\n");
+  printf("buttons_main: button_daemon stopped\n");
   fflush(stdout);
   return EXIT_SUCCESS;
 }
